@@ -22,7 +22,7 @@ app.get('/', function(req, res) {
 <body>
 
 <form action="/post" method="POST">
-<textarea type="textarea" name="data" style="width:100%;height:50%" placeholder="raw edid bytes"></textarea>
+<textarea type="textarea" name="data" style="width:100%;height:20%" placeholder="Omni inputXML"></textarea>
    <button type="submit">Submit</button>
 </form>
 
@@ -41,7 +41,37 @@ app.post('/post', function(req, res) {
 
     child.stdin.setEncoding('utf-8');
 
-    child.stdin.write(req.body.data);
+var outputdata = "<html><body style='word-wrap: break-word;white-space: pre-wrap;'>"
+
+outputdata += `
+<form action="/post" method="POST">
+<textarea type="textarea" name="data" style="width:100%;height:20%" placeholder="Omni inputXML"></textarea>
+   <button type="submit">Submit</button>
+</form>
+
+`
+
+
+var inputdata = req.body.data;
+inputdata = Buffer.from(inputdata, 'base64').toString('utf-8')
+//outputdata += inputdata + "<br /><br />";
+
+    var a = inputdata.indexOf("<edid>");
+    var b = inputdata.indexOf("</edid>", a+1);
+
+inputdata = inputdata.substr(a+6, b-a-6);
+outputdata += inputdata + "<br /><br />"
+
+inputdata = Buffer.from(inputdata, 'base64')
+
+console.log(inputdata)
+
+//outputdata += inputdata + "<br /><br />";
+
+
+
+
+    child.stdin.write(inputdata);
 
     child.stdin.end();
 
@@ -55,7 +85,10 @@ app.post('/post', function(req, res) {
 
     child.stdout.on('end', function(data) {
         console.log(databuf);
-        res.send("<html><body style='word-wrap: break-word;white-space: pre-wrap;'>" + databuf + "</body></html>")
+
+outputdata += databuf + "</body></html>";
+
+        res.send(outputdata)
     })
 
 
