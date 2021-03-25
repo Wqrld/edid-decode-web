@@ -54,25 +54,25 @@ app.post('/post', function (req, res) {
 
     var inputdata = req.body.data;
 
-if(inputdata.indexOf("</edid>") > -1){
-    var isEUI = true;
-}
+    if (inputdata.indexOf("</edid>") > -1) {
+        var isEUI = true;
+    }
 
-if(!isEUI){
-    inputdata = Buffer.from(inputdata, 'base64').toString('utf-8') //b64 decode
-}
-  
+    if (!isEUI) {
+        inputdata = Buffer.from(inputdata, 'base64').toString('utf-8') //b64 decode
+    }
+
     //outputdata += inputdata + "<br /><br />";
 
     //remove edids
     var a = inputdata.indexOf("<edid");
     var b = inputdata.indexOf("</edid>", a + 1);
-if(isEUI){
-    inputdata = inputdata.substr(a + 13, b - a - 6);
-}else{
-    inputdata = inputdata.substr(a + 6, b - a - 6);
-}
-   
+    if (isEUI) {
+        inputdata = inputdata.substr(a + 13, b - a - 6);
+    } else {
+        inputdata = inputdata.substr(a + 6, b - a - 6);
+    }
+
 
     //base64, what was inside of <edid></edid>
     outputdata += inputdata + "<br /><br />" //
