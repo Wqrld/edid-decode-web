@@ -42,7 +42,7 @@ app.post('/post', function (req, res) {
     var inputdata = req.body.data;
 
     if (inputdata.indexOf("</edid>") > -1) { // has <edid>
-        format = "EUI";
+        format = "UEI";
     }
     console.log("INPUT")
     console.log(inputdata[2])
@@ -50,26 +50,37 @@ app.post('/post', function (req, res) {
     if (inputdata[2] == " " || inputdata[4] == " ") {
         format = "normalhex"
     }
-    
-    
-    if (format != "EUI" && format != "normalhex") {
+
+    if(inputdata.startsWith("AP//")){
+        format = "AP"
+     //   inputdata = inputdata.slice(7)
+    }
+
+    if (format != "UEI" && format != "normalhex" && format != "AP") {
         inputdata = Buffer.from(inputdata, 'base64').toString('utf-8') //b64 decode
     }
-    console.log(format)
+    console.log("format:" + format)
+    console.log("inputdata: " + inputdata)
 
     //outputdata += inputdata + "<br /><br />";
 
     //remove edids
-    var a = inputdata.indexOf("<edid");
-    var b = inputdata.indexOf("</edid>", a + 1);
-    if (a != 0) {
-        if (format == "EUI") {
-            inputdata = inputdata.substr(a + 13, b - a - 6);
-        } else {
-            inputdata = inputdata.substr(a + 6, b - a - 6);
-        }
-    }
+    var edidXMLstart = inputdata.indexOf("<edid");
+    var edidXMLend = inputdata.indexOf("</edid>", edidXMLstart + 1);
+    if (edidXMLstart != -1 && edidXMLend != -1) {
 
+            console.log("start: ", inputdata);
+
+            if (format == "UEI") {
+                inputdata = inputdata.substr(edidXMLstart, edidXMLstart + edidXMLend);
+                var edidend = inputdata.indexOf('>')
+                inputdata = inputdata.slice(edidend + 1)
+                console.log("POSTUEI: " + inputdata);
+            } else {
+                // Probably unreachable.
+                inputdata = inputdata.substr(edidXMLstart + 6, edidXMLend - edidXMLstart - 6);
+            }
+    }
 
 
     //base64, what was inside of <edid></edid>
