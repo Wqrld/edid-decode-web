@@ -1,0 +1,1 @@
+docker run -v "${PWD}:/src" semgrep/semgrep:latest semgrep scan --config auto
