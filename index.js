@@ -1,22 +1,42 @@
 'use strict';
-const express = require('express')
+const express = require('express');
 const bodyParser = require('body-parser');
+const { exec, spawn } = require('child_process');
 
 const app = express();
-var exec = require('child_process').exec;
 
-var spawn = require('child_process').spawn
-
-var format;
-
-var formhtml = `
+const FORM_HTML = `
 <form action="/post" method="POST">
 <textarea type="textarea" name="data" style="width:100%;height:20%" placeholder="inputXML or raw EDID"></textarea>
    <button type="submit">Submit</button>
 </form>
+`;
 
-`
+const detectFormat = (inputData) => {
+    if (inputData.includes('</edid>')) {
+        return 'UEI';
+    }
+    if (inputData[2] === ' ' || inputData[4] === ' ') {
+        return 'normalhex';
+    }
+    if (inputData.startsWith('AP//')) {
+        return 'AP';
+    }
+    return 'base64';
+};
 
+const processInputData = (inputData, format) => {
+    if (format === 'UEI') {
+        const edidXMLstart = inputData.indexOf('<edid');
+        const edidXMLend = inputData.indexOf('</edid>', edidXMLstart + 1);
+        if (edidXMLstart !== -1 && edidXMLend !== -1) {
+            inputData = inputData.substr(edidXMLstart, edidXMLstart + edidXMLend);
+            const edidend = inputData.indexOf('>');
+            inputData = inputData.slice(edidend + 1);
+        }
+    }
+    return inputData;
+};
 
 app.use(
     bodyParser.urlencoded({
@@ -25,102 +45,84 @@ app.use(
 );
 app.use(bodyParser.json());
 
-app.get('/', function (req, res) {
-    res.send(formhtml)
+app.get('/', (req, res) => {
+    res.send(FORM_HTML);
+});
 
-})
-
-
-app.post('/post', function (req, res) {
-
-    var child = spawn('/root/edid/edid-decode/edid-decode', ["-c", "--skip-sha", "-"]);
+app.post('/post', (req, res) => {
+    const child = spawn('./edid-decode', ['-c', '--skip-sha', '-']);
     child.stdin.setEncoding('utf-8');
 
-    var outputdata = "<html><body style='word-wrap: break-word;white-space: pre-wrap;'>"
-    outputdata += formhtml
+    let outputData = '<html><body style=\'word-wrap: break-word;white-space: pre-wrap;\'>';
+    outputData += FORM_HTML;
 
-    var inputdata = req.body.data;
+    let inputData = req.body.data;
+    let format;
 
-    if (inputdata.indexOf("</edid>") > -1) { // has <edid>
-        format = "UEI";
+    if (inputData.indexOf('</edid>') > -1) {
+        format = 'UEI';
     }
-    console.log("INPUT")
-    console.log(inputdata[2])
-    //hex 00 FF FF
-    if (inputdata[2] == " " || inputdata[4] == " ") {
-        format = "normalhex"
-    }
-
-    if(inputdata.startsWith("AP//")){
-        format = "AP"
-     //   inputdata = inputdata.slice(7)
+    console.log('INPUT');
+    console.log(inputData[2]);
+    
+    if (inputData[2] === ' ' || inputData[4] === ' ') {
+        format = 'normalhex';
     }
 
-    if (format != "UEI" && format != "normalhex" && format != "AP") {
-        inputdata = Buffer.from(inputdata, 'base64').toString('utf-8') //b64 decode
-    }
-    console.log("format:" + format)
-    console.log("inputdata: " + inputdata)
-
-    //outputdata += inputdata + "<br /><br />";
-
-    //remove edids
-    var edidXMLstart = inputdata.indexOf("<edid");
-    var edidXMLend = inputdata.indexOf("</edid>", edidXMLstart + 1);
-    if (edidXMLstart != -1 && edidXMLend != -1) {
-
-            console.log("start: ", inputdata);
-
-            if (format == "UEI") {
-                inputdata = inputdata.substr(edidXMLstart, edidXMLstart + edidXMLend);
-                var edidend = inputdata.indexOf('>')
-                inputdata = inputdata.slice(edidend + 1)
-                console.log("POSTUEI: " + inputdata);
-            } else {
-                // Probably unreachable.
-                inputdata = inputdata.substr(edidXMLstart + 6, edidXMLend - edidXMLstart - 6);
-            }
+    if (inputData.startsWith('AP//')) {
+        format = 'AP';
     }
 
+    console.log('Format:', format);
+    console.log('Input data:', inputData);
 
-    //base64, what was inside of <edid></edid>
-    outputdata += inputdata + "<br /><br />" //
-    if (format == "normalhex") {
-        let inputbytes = req.body.data.replace(/[\n\t\r]/g, "").replace(/0x/g, "").replace(/ /g, "").padEnd(2 * 256, "00")
-        console.log("inputbytes")
-        console.log(inputbytes)
-        inputdata = Buffer.from(inputbytes, 'hex')
+    if (format !== 'UEI' && format !== 'normalhex' && format !== 'AP') {
+        inputData = Buffer.from(inputData, 'base64').toString('utf-8');
+    }
+
+    inputData = processInputData(inputData, format);
+    outputData += inputData + '<br /><br />';
+
+    let processedInput;
+    if (format === 'normalhex') {
+        const inputBytes = req.body.data
+            .replace(/[\n\t\r]/g, '')
+            .replace(/0x/g, '')
+            .replace(/ /g, '')
+            .padEnd(2 * 256, '00');
+        processedInput = Buffer.from(inputBytes, 'hex');
     } else {
-        inputdata = Buffer.from(inputdata, 'base64')
+        processedInput = Buffer.from(inputData, 'base64');
     }
 
-    console.log("debug prewrite")
-    console.log(inputdata)
-    console.log("debug postwrite")
-
-    child.stdin.write(inputdata);
-
+    child.stdin.write(processedInput);
     child.stdin.end();
 
-    var databuf;
+    let dataBuffer = '';
 
-    child.stdout.on('data', function (data) {
-        console.log(data)
-        if (data != undefined) {
-            databuf += data;
+    child.stdout.on('data', (data) => {
+        if (data) {
+            dataBuffer += data;
         }
+    });
 
-    })
+    child.stderr.on('data', (data) => {
+        console.error(`Error: ${data}`);
+    });
 
-    child.stdout.on('end', function (data) {
-        console.log(databuf); // response buffer
+    child.on('error', (error) => {
+        console.error(`Failed to start process: ${error}`);
+        res.status(500).send('Internal server error');
+    });
 
-        outputdata += databuf.substr(9) + "</body></html>";//substr undefined from response
+    child.stdout.on('end', () => {
+        outputData += dataBuffer.substr(9) + '</body></html>';
+        res.send(outputData);
+    });
+});
 
-        res.send(outputdata)
-    })
+if (require.main === module) {
+    app.listen(2005);
+}
 
-
-})
-
-app.listen(2005)
+module.exports = app;
